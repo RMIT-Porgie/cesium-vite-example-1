@@ -5,6 +5,8 @@ import {
   Color,
   Cartographic,
   Cartesian3,
+  Matrix3,
+  Quaternion,
 } from "cesium";
 
 export default function DesignComponent() {
@@ -44,10 +46,21 @@ export default function DesignComponent() {
   colInput.min = 1;
   colInput.value = 2;
   colInput.className = "border rounded px-2 py-1 w-16";
+  // PV Height input
+  const heightLabel = document.createElement("label");
+  heightLabel.textContent = "PV Height (m):";
+  const heightInput = document.createElement("input");
+  heightInput.type = "number";
+  heightInput.min = 0;
+  heightInput.step = 0.1;
+  heightInput.value = 3;
+  heightInput.className = "border rounded px-2 py-1 w-20";
   pvConfigDiv.appendChild(rowLabel);
   pvConfigDiv.appendChild(rowInput);
   pvConfigDiv.appendChild(colLabel);
   pvConfigDiv.appendChild(colInput);
+  pvConfigDiv.appendChild(heightLabel);
+  pvConfigDiv.appendChild(heightInput);
   div.appendChild(pvConfigDiv);
 
   // Store PV rectangles for cleanup
@@ -270,6 +283,42 @@ export default function DesignComponent() {
           },
         });
 
+        const widthVec = Cartesian3.normalize(
+          Cartesian3.subtract(c1, c0, new Cartesian3()),
+          new Cartesian3(),
+        );
+        const lengthVec = Cartesian3.normalize(
+          Cartesian3.subtract(c3, c0, new Cartesian3()),
+          new Cartesian3(),
+        );
+        // Swap cross product order to ensure Z points up
+        const upVec = Cartesian3.normalize(
+          Cartesian3.cross(lengthVec, widthVec, new Cartesian3()),
+          new Cartesian3(),
+        );
+        // Re-orthogonalize lengthVec to ensure it's perpendicular to widthVec and upVec
+        const orthoLengthVec = Cartesian3.cross(
+          upVec,
+          widthVec,
+          new Cartesian3(),
+        );
+        // Cesium's Matrix3 constructor is column-major: [x, y, z] axes as columns
+        const rectRotationMatrix = new Matrix3(
+          widthVec.x,
+          orthoLengthVec.x,
+          upVec.x,
+          widthVec.y,
+          orthoLengthVec.y,
+          upVec.y,
+          widthVec.z,
+          orthoLengthVec.z,
+          upVec.z,
+        );
+        const rectOrientation = Quaternion.fromRotationMatrix(
+          rectRotationMatrix,
+          new Quaternion(),
+        );
+
         // Calculate and display width, length, and area
         // Width: distance from c0 to c1, Length: distance from c0 to c3
         const widthMeters = cartesianDistance(c0, c1);
@@ -292,10 +341,6 @@ export default function DesignComponent() {
         };
         const generatePVLayout = (rows, cols) => {
           clearPVEntities();
-          // PV size in meters
-          const pvWidth = 1.0;
-          const pvLength = 1.7;
-          // Rectangle basis vectors
           const o = c0;
           const w = c1;
           const l = c3;
@@ -311,7 +356,9 @@ export default function DesignComponent() {
           // Spacing between PVs (no gap)
           const stepWidth = totalWidth / cols;
           const stepLength = totalLength / rows;
-          // For each row/col, place a PV rectangle
+          // Path to glTF model (relative to public or src)
+          const gltfUrl = "./asset/solar_panel (1)/scene.gltf";
+          // For each row/col, place a PV model
           for (let r = 0; r < rows; r++) {
             for (let c = 0; c < cols; c++) {
               // Cell origin
@@ -332,7 +379,7 @@ export default function DesignComponent() {
                 ),
                 new Cartesian3(),
               );
-              // PV corners (centered in cell)
+              // PV center
               const pvCenter = Cartesian3.add(
                 cellOrigin,
                 Cartesian3.add(
@@ -350,85 +397,26 @@ export default function DesignComponent() {
                 ),
                 new Cartesian3(),
               );
-              // PV rectangle corners
-              const halfW = pvWidth / 2;
-              const halfL = pvLength / 2;
-              // Four corners relative to center
-              const corner1 = Cartesian3.add(
-                pvCenter,
-                Cartesian3.add(
-                  Cartesian3.multiplyByScalar(
-                    vWidthNorm,
-                    -halfW,
-                    new Cartesian3(),
-                  ),
-                  Cartesian3.multiplyByScalar(
-                    vLengthNorm,
-                    -halfL,
-                    new Cartesian3(),
-                  ),
-                  new Cartesian3(),
-                ),
-                new Cartesian3(),
+              // Get PV height input (default 3)
+              const pvHeight = Number(heightInput.value) || 3;
+              // Place at ground + pvHeight
+              const pvCenterCarto = Cartographic.fromCartesian(pvCenter);
+              const baseHeight = (pvCenterCarto.height || 0) + pvHeight;
+              pvCenterCarto.height = baseHeight;
+              const pvCart = Cartesian3.fromRadians(
+                pvCenterCarto.longitude,
+                pvCenterCarto.latitude,
+                pvCenterCarto.height,
               );
-              const corner2 = Cartesian3.add(
-                pvCenter,
-                Cartesian3.add(
-                  Cartesian3.multiplyByScalar(
-                    vWidthNorm,
-                    halfW,
-                    new Cartesian3(),
-                  ),
-                  Cartesian3.multiplyByScalar(
-                    vLengthNorm,
-                    -halfL,
-                    new Cartesian3(),
-                  ),
-                  new Cartesian3(),
-                ),
-                new Cartesian3(),
-              );
-              const corner3 = Cartesian3.add(
-                pvCenter,
-                Cartesian3.add(
-                  Cartesian3.multiplyByScalar(
-                    vWidthNorm,
-                    halfW,
-                    new Cartesian3(),
-                  ),
-                  Cartesian3.multiplyByScalar(
-                    vLengthNorm,
-                    halfL,
-                    new Cartesian3(),
-                  ),
-                  new Cartesian3(),
-                ),
-                new Cartesian3(),
-              );
-              const corner4 = Cartesian3.add(
-                pvCenter,
-                Cartesian3.add(
-                  Cartesian3.multiplyByScalar(
-                    vWidthNorm,
-                    -halfW,
-                    new Cartesian3(),
-                  ),
-                  Cartesian3.multiplyByScalar(
-                    vLengthNorm,
-                    halfL,
-                    new Cartesian3(),
-                  ),
-                  new Cartesian3(),
-                ),
-                new Cartesian3(),
-              );
-              // Add PV entity
+              // Add model entity
               const pvEntity = viewer.entities.add({
-                polygon: {
-                  hierarchy: [corner1, corner2, corner3, corner4, corner1],
-                  material: Color.BLUE.withAlpha(0.7),
-                  outline: true,
-                  outlineColor: Color.BLACK,
+                name: "Solar Panel",
+                position: pvCart,
+                orientation: rectOrientation, // Use rectangle ROI orientation for all PVs
+                model: {
+                  uri: gltfUrl,
+                  scale: 1.0, // Fixed scale for consistent PV size
+                  maximumScale: 10,
                 },
               });
               pvEntities.push(pvEntity);
