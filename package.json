@@ -39,8 +39,10 @@
     "vite-plugin-static-copy": "^1.0.0"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.1.11",
     "bootstrap": "^5.3.7",
-    "cesium": "^1.114.0"
+    "cesium": "^1.114.0",
+    "tailwindcss": "^4.1.11"
   },
   "lint-staged": {
     "*.{js,html}": [

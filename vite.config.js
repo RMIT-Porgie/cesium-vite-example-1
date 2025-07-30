@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { viteStaticCopy } from "vite-plugin-static-copy";
+import tailwindcss from "@tailwindcss/vite";
 
 const cesiumSource = "node_modules/cesium/Build/Cesium";
 // This is the base url for static files that CesiumJS needs to load.
@@ -14,6 +15,8 @@ export default defineConfig({
     CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
   },
   plugins: [
+    // Add Tailwind CSS plugin
+    tailwindcss(),
     // Copy Cesium Assets, Widgets, and Workers to a static directory.
     // If you need to add your own static files to your project, use the `public` directory
     // and other options listed here: https://vitejs.dev/guide/assets.html#the-public-directory
