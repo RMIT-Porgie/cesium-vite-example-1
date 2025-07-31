@@ -55,6 +55,7 @@ export default function DesignComponent() {
   heightInput.step = 0.1;
   heightInput.value = 3;
   heightInput.className = "border rounded px-2 py-1 w-20";
+
   pvConfigDiv.appendChild(rowLabel);
   pvConfigDiv.appendChild(rowInput);
   pvConfigDiv.appendChild(colLabel);
@@ -66,17 +67,368 @@ export default function DesignComponent() {
   // Store PV rectangles for cleanup
   let pvEntities = [];
 
+  // Store current ROI corners for export functions
+  let currentCorners = null;
+
+  // Helper function for distance between two Cartesian3 points
+  function cartesianDistance(a, b) {
+    return Math.sqrt(
+      Math.pow(a.x - b.x, 2) + Math.pow(a.y - b.y, 2) + Math.pow(a.z - b.z, 2),
+    );
+  }
+
+  // Export functions moved to root level
+  function exportROIToOBJ(corners) {
+    if (!corners || corners.length < 4) {
+      console.error("No valid ROI corners provided");
+      return;
+    }
+
+    const [c0, c1, c2, c3] = corners;
+
+    // Create a local flat coordinate system based on the ROI
+    const roiCenter = Cartesian3.lerp(c0, c2, 0.5, new Cartesian3());
+    const roiCenterCarto = Cartographic.fromCartesian(roiCenter);
+
+    // Create local coordinate system at terrain height
+    const localOrigin = Cartesian3.fromRadians(
+      roiCenterCarto.longitude,
+      roiCenterCarto.latitude,
+      roiCenterCarto.height,
+    );
+
+    // Local axes based on ROI orientation
+    const vWidth = Cartesian3.subtract(c1, c0, new Cartesian3());
+    const vLength = Cartesian3.subtract(c3, c0, new Cartesian3());
+    const vWidthNorm = Cartesian3.normalize(vWidth, new Cartesian3());
+    const vLengthNorm = Cartesian3.normalize(vLength, new Cartesian3());
+
+    // Ensure Z points up (perpendicular to the ground plane)
+    const upVec = Cartesian3.normalize(
+      Cartesian3.cross(vLengthNorm, vWidthNorm, new Cartesian3()),
+      new Cartesian3(),
+    );
+
+    // Re-orthogonalize length vector
+    const orthoLengthVec = Cartesian3.cross(
+      upVec,
+      vWidthNorm,
+      new Cartesian3(),
+    );
+
+    // Function to convert global coordinates to local flat coordinates
+    const toLocalCoords = (globalPos) => {
+      const localPos = Cartesian3.subtract(
+        globalPos,
+        localOrigin,
+        new Cartesian3(),
+      );
+      return {
+        x: Cartesian3.dot(localPos, vWidthNorm),
+        y: Cartesian3.dot(localPos, orthoLengthVec),
+        z: Cartesian3.dot(localPos, upVec),
+      };
+    };
+
+    // Export ROI as a closed box
+    let obj = "";
+
+    // ROI height for the box
+    const roiHeight = 1.0; // 1 meter height
+
+    // Top face vertices (at ground level)
+    const top1 = c0;
+    const top2 = c1;
+    const top3 = c2;
+    const top4 = c3;
+
+    // Bottom face vertices (offset by height in upVec)
+    const heightVec = Cartesian3.multiplyByScalar(
+      upVec,
+      roiHeight,
+      new Cartesian3(),
+    );
+    const bottom1 = Cartesian3.add(c0, heightVec, new Cartesian3());
+    const bottom2 = Cartesian3.add(c1, heightVec, new Cartesian3());
+    const bottom3 = Cartesian3.add(c2, heightVec, new Cartesian3());
+    const bottom4 = Cartesian3.add(c3, heightVec, new Cartesian3());
+
+    // Convert to local coordinates and add vertices
+    const localTop1 = toLocalCoords(top1);
+    const localTop2 = toLocalCoords(top2);
+    const localTop3 = toLocalCoords(top3);
+    const localTop4 = toLocalCoords(top4);
+    const localBottom1 = toLocalCoords(bottom1);
+    const localBottom2 = toLocalCoords(bottom2);
+    const localBottom3 = toLocalCoords(bottom3);
+    const localBottom4 = toLocalCoords(bottom4);
+
+    // Write vertices (top face first, then bottom face)
+    obj += `v ${localTop1.x.toFixed(6)} ${localTop1.y.toFixed(6)} ${localTop1.z.toFixed(6)}\n`;
+    obj += `v ${localTop2.x.toFixed(6)} ${localTop2.y.toFixed(6)} ${localTop2.z.toFixed(6)}\n`;
+    obj += `v ${localTop3.x.toFixed(6)} ${localTop3.y.toFixed(6)} ${localTop3.z.toFixed(6)}\n`;
+    obj += `v ${localTop4.x.toFixed(6)} ${localTop4.y.toFixed(6)} ${localTop4.z.toFixed(6)}\n`;
+    obj += `v ${localBottom1.x.toFixed(6)} ${localBottom1.y.toFixed(6)} ${localBottom1.z.toFixed(6)}\n`;
+    obj += `v ${localBottom2.x.toFixed(6)} ${localBottom2.y.toFixed(6)} ${localBottom2.z.toFixed(6)}\n`;
+    obj += `v ${localBottom3.x.toFixed(6)} ${localBottom3.y.toFixed(6)} ${localBottom3.z.toFixed(6)}\n`;
+    obj += `v ${localBottom4.x.toFixed(6)} ${localBottom4.y.toFixed(6)} ${localBottom4.z.toFixed(6)}\n`;
+
+    // Write faces (OBJ is 1-indexed)
+    // Top face: 1-2-3-4
+    obj += `f 1 2 3 4\n`;
+    // Bottom face: 5-6-7-8
+    obj += `f 5 6 7 8\n`;
+    // Sides
+    obj += `f 1 2 6 5\n`;
+    obj += `f 2 3 7 6\n`;
+    obj += `f 3 4 8 7\n`;
+    obj += `f 4 1 5 8\n`;
+
+    // Download
+    const blob = new Blob([obj], { type: "text/plain" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "roi.obj";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function exportSolarPanelsToOBJ(corners) {
+    if (!corners || corners.length < 4) {
+      console.error("No valid ROI corners provided");
+      return;
+    }
+
+    const [c0, c1, c2, c3] = corners;
+
+    // Create a local flat coordinate system based on the ROI
+    const roiCenter = Cartesian3.lerp(c0, c2, 0.5, new Cartesian3());
+    const roiCenterCarto = Cartographic.fromCartesian(roiCenter);
+    // Create local coordinate system at terrain height
+    const localOrigin = Cartesian3.fromRadians(
+      roiCenterCarto.longitude,
+      roiCenterCarto.latitude,
+      roiCenterCarto.height,
+    );
+
+    // Local axes based on ROI orientation
+    const vWidth = Cartesian3.subtract(c1, c0, new Cartesian3());
+    const vLength = Cartesian3.subtract(c3, c0, new Cartesian3());
+    const vWidthNorm = Cartesian3.normalize(vWidth, new Cartesian3());
+    const vLengthNorm = Cartesian3.normalize(vLength, new Cartesian3());
+
+    // Ensure Z points up (perpendicular to the ground plane)
+    const upVec = Cartesian3.normalize(
+      Cartesian3.cross(vLengthNorm, vWidthNorm, new Cartesian3()),
+      new Cartesian3(),
+    );
+
+    // Re-orthogonalize length vector
+    const orthoLengthVec = Cartesian3.cross(
+      upVec,
+      vWidthNorm,
+      new Cartesian3(),
+    );
+
+    // Function to convert global coordinates to local flat coordinates
+    const toLocalCoords = (globalPos) => {
+      const localPos = Cartesian3.subtract(
+        globalPos,
+        localOrigin,
+        new Cartesian3(),
+      );
+      return {
+        x: Cartesian3.dot(localPos, vWidthNorm),
+        y: Cartesian3.dot(localPos, orthoLengthVec),
+        z: Cartesian3.dot(localPos, upVec),
+      };
+    };
+
+    // Panel rectangle size (meters)
+    const panelWidth = 2; // width along ROI width axis
+    const panelLength = 1; // length along ROI length axis
+
+    // Get current PV configuration
+    const rows = parseInt(rowInput.value);
+    const cols = parseInt(colInput.value);
+    const panelHeight = parseFloat(heightInput.value);
+
+    // Calculate panel layout
+    const totalWidth = cartesianDistance(c0, c1);
+    const totalLength = cartesianDistance(c0, c3);
+
+    // Calculate spacing
+    const availableWidth = totalWidth - panelWidth;
+    const availableLength = totalLength - panelLength;
+    const spacingWidth = cols > 1 ? availableWidth / (cols - 1) : 0;
+    const spacingLength = rows > 1 ? availableLength / (rows - 1) : 0;
+
+    // Generate OBJ content
+    let obj = "";
+    let vertexIndex = 1;
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        // Calculate panel center in local coordinates
+        const localX = col * spacingWidth + panelWidth / 2;
+        const localY = row * spacingLength + panelLength / 2;
+
+        // Convert to global coordinates
+        const localPos = Cartesian3.add(
+          localOrigin,
+          Cartesian3.add(
+            Cartesian3.multiplyByScalar(vWidthNorm, localX, new Cartesian3()),
+            Cartesian3.multiplyByScalar(
+              orthoLengthVec,
+              localY,
+              new Cartesian3(),
+            ),
+            new Cartesian3(),
+          ),
+          new Cartesian3(),
+        );
+
+        // Panel corners in global coordinates
+        const panelHalfWidth = panelWidth / 2;
+        const panelHalfLength = panelLength / 2;
+
+        const panelC0 = Cartesian3.add(
+          localPos,
+          Cartesian3.add(
+            Cartesian3.multiplyByScalar(
+              vWidthNorm,
+              -panelHalfWidth,
+              new Cartesian3(),
+            ),
+            Cartesian3.multiplyByScalar(
+              orthoLengthVec,
+              -panelHalfLength,
+              new Cartesian3(),
+            ),
+            new Cartesian3(),
+          ),
+          new Cartesian3(),
+        );
+
+        const panelC1 = Cartesian3.add(
+          localPos,
+          Cartesian3.add(
+            Cartesian3.multiplyByScalar(
+              vWidthNorm,
+              panelHalfWidth,
+              new Cartesian3(),
+            ),
+            Cartesian3.multiplyByScalar(
+              orthoLengthVec,
+              -panelHalfLength,
+              new Cartesian3(),
+            ),
+            new Cartesian3(),
+          ),
+          new Cartesian3(),
+        );
+
+        const panelC2 = Cartesian3.add(
+          localPos,
+          Cartesian3.add(
+            Cartesian3.multiplyByScalar(
+              vWidthNorm,
+              panelHalfWidth,
+              new Cartesian3(),
+            ),
+            Cartesian3.multiplyByScalar(
+              orthoLengthVec,
+              panelHalfLength,
+              new Cartesian3(),
+            ),
+            new Cartesian3(),
+          ),
+          new Cartesian3(),
+        );
+
+        const panelC3 = Cartesian3.add(
+          localPos,
+          Cartesian3.add(
+            Cartesian3.multiplyByScalar(
+              vWidthNorm,
+              -panelHalfWidth,
+              new Cartesian3(),
+            ),
+            Cartesian3.multiplyByScalar(
+              orthoLengthVec,
+              panelHalfLength,
+              new Cartesian3(),
+            ),
+            new Cartesian3(),
+          ),
+          new Cartesian3(),
+        );
+
+        // Top face vertices (at ground level)
+        const top1 = panelC0;
+        const top2 = panelC1;
+        const top3 = panelC2;
+        const top4 = panelC3;
+
+        // Bottom face vertices (offset by height in upVec)
+        const heightVec = Cartesian3.multiplyByScalar(
+          upVec,
+          panelHeight,
+          new Cartesian3(),
+        );
+        const bottom1 = Cartesian3.add(panelC0, heightVec, new Cartesian3());
+        const bottom2 = Cartesian3.add(panelC1, heightVec, new Cartesian3());
+        const bottom3 = Cartesian3.add(panelC2, heightVec, new Cartesian3());
+        const bottom4 = Cartesian3.add(panelC3, heightVec, new Cartesian3());
+
+        // Convert to local coordinates and add vertices
+        const localTop1 = toLocalCoords(top1);
+        const localTop2 = toLocalCoords(top2);
+        const localTop3 = toLocalCoords(top3);
+        const localTop4 = toLocalCoords(top4);
+        const localBottom1 = toLocalCoords(bottom1);
+        const localBottom2 = toLocalCoords(bottom2);
+        const localBottom3 = toLocalCoords(bottom3);
+        const localBottom4 = toLocalCoords(bottom4);
+
+        // Write vertices (top face first, then bottom face)
+        obj += `v ${localTop1.x.toFixed(6)} ${localTop1.y.toFixed(6)} ${localTop1.z.toFixed(6)}\n`;
+        obj += `v ${localTop2.x.toFixed(6)} ${localTop2.y.toFixed(6)} ${localTop2.z.toFixed(6)}\n`;
+        obj += `v ${localTop3.x.toFixed(6)} ${localTop3.y.toFixed(6)} ${localTop3.z.toFixed(6)}\n`;
+        obj += `v ${localTop4.x.toFixed(6)} ${localTop4.y.toFixed(6)} ${localTop4.z.toFixed(6)}\n`;
+        obj += `v ${localBottom1.x.toFixed(6)} ${localBottom1.y.toFixed(6)} ${localBottom1.z.toFixed(6)}\n`;
+        obj += `v ${localBottom2.x.toFixed(6)} ${localBottom2.y.toFixed(6)} ${localBottom2.z.toFixed(6)}\n`;
+        obj += `v ${localBottom3.x.toFixed(6)} ${localBottom3.y.toFixed(6)} ${localBottom3.z.toFixed(6)}\n`;
+        obj += `v ${localBottom4.x.toFixed(6)} ${localBottom4.y.toFixed(6)} ${localBottom4.z.toFixed(6)}\n`;
+
+        // Write faces (OBJ is 1-indexed)
+        // Top face: 1-2-3-4
+        obj += `f ${vertexIndex} ${vertexIndex + 1} ${vertexIndex + 2} ${vertexIndex + 3}\n`;
+        // Bottom face: 5-6-7-8
+        obj += `f ${vertexIndex + 4} ${vertexIndex + 5} ${vertexIndex + 6} ${vertexIndex + 7}\n`;
+        // Sides
+        obj += `f ${vertexIndex} ${vertexIndex + 1} ${vertexIndex + 5} ${vertexIndex + 4}\n`;
+        obj += `f ${vertexIndex + 1} ${vertexIndex + 2} ${vertexIndex + 6} ${vertexIndex + 5}\n`;
+        obj += `f ${vertexIndex + 2} ${vertexIndex + 3} ${vertexIndex + 7} ${vertexIndex + 6}\n`;
+        obj += `f ${vertexIndex + 3} ${vertexIndex} ${vertexIndex + 4} ${vertexIndex + 7}\n`;
+
+        vertexIndex += 8;
+      }
+    }
+
+    // Download
+    const blob = new Blob([obj], { type: "text/plain" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "solar_panels.obj";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
   function startDrawingRectangle() {
     const viewer = window._mainViewer;
-
-    // Helper for distance between two Cartesian3 points
-    function cartesianDistance(a, b) {
-      return Math.sqrt(
-        Math.pow(a.x - b.x, 2) +
-          Math.pow(a.y - b.y, 2) +
-          Math.pow(a.z - b.z, 2),
-      );
-    }
 
     // Rectangle drawing with 3 clicks: origin, width, length (perpendicular)
     let origin = null;
@@ -84,30 +436,6 @@ export default function DesignComponent() {
     let lengthPoint = null;
     let tempLineEntity = null;
     let tempRectEntity = null;
-
-    // Remove previous entities
-    if (rectangleEntity) {
-      viewer.entities.remove(rectangleEntity);
-      rectangleEntity = null;
-    }
-    // Remove previous PV entities
-    if (pvEntities.length > 0) {
-      pvEntities.forEach((e) => viewer.entities.remove(e));
-      pvEntities = [];
-    }
-    if (
-      handler &&
-      typeof handler.destroy === "function" &&
-      (!handler.isDestroyed ||
-        (typeof handler.isDestroyed === "function" && !handler.isDestroyed()))
-    ) {
-      handler.destroy();
-    }
-
-    // Clear info display at start
-    infoDiv.innerHTML = "";
-
-    handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
 
     // Mouse move animation for width and length
     function updateTempLine(positions) {
@@ -149,6 +477,30 @@ export default function DesignComponent() {
         tempRectEntity = null;
       }
     }
+
+    // Remove previous entities
+    if (rectangleEntity) {
+      viewer.entities.remove(rectangleEntity);
+      rectangleEntity = null;
+    }
+    // Remove previous PV entities
+    if (pvEntities.length > 0) {
+      pvEntities.forEach((e) => viewer.entities.remove(e));
+      pvEntities = [];
+    }
+    if (
+      handler &&
+      typeof handler.destroy === "function" &&
+      (!handler.isDestroyed ||
+        (typeof handler.isDestroyed === "function" && !handler.isDestroyed()))
+    ) {
+      handler.destroy();
+    }
+
+    // Clear info display at start
+    infoDiv.innerHTML = "";
+
+    handler = new ScreenSpaceEventHandler(viewer.scene.canvas);
 
     // Mouse move handler for animation
     const moveHandler = new ScreenSpaceEventHandler(viewer.scene.canvas);
@@ -277,9 +629,9 @@ export default function DesignComponent() {
         rectangleEntity = viewer.entities.add({
           polygon: {
             hierarchy: [c0, c1, c2, c3, c0],
-            material: Color.RED.withAlpha(0.3),
+            material: Color.WHITE.withAlpha(0.5),
             outline: true,
-            outlineColor: Color.RED,
+            outlineColor: Color.WHITE,
           },
         });
 
@@ -291,9 +643,9 @@ export default function DesignComponent() {
           Cartesian3.subtract(c3, c0, new Cartesian3()),
           new Cartesian3(),
         );
-        // Swap cross product order to ensure Z points up
+        // Use correct cross product order: widthVec × lengthVec to ensure Z points up
         const upVec = Cartesian3.normalize(
-          Cartesian3.cross(lengthVec, widthVec, new Cartesian3()),
+          Cartesian3.cross(widthVec, lengthVec, new Cartesian3()),
           new Cartesian3(),
         );
         // Re-orthogonalize lengthVec to ensure it's perpendicular to widthVec and upVec
@@ -331,6 +683,35 @@ export default function DesignComponent() {
 
         // Show PV config UI
         pvConfigDiv.style.display = "flex";
+        // --- Export OBJ logic ---
+        // Add export buttons for ROI and solar panels separately
+        let exportRoiBtn = pvConfigDiv.querySelector(".export-roi-btn");
+        let exportPanelsBtn = pvConfigDiv.querySelector(".export-panels-btn");
+
+        if (!exportRoiBtn) {
+          exportRoiBtn = document.createElement("button");
+          exportRoiBtn.textContent = "Export ROI";
+          exportRoiBtn.className =
+            "export-roi-btn bg-green-600 hover:bg-green-800 text-white font-bold py-2 px-4 rounded mr-2";
+          pvConfigDiv.appendChild(exportRoiBtn);
+        }
+        exportRoiBtn.style.display = "inline-block";
+
+        if (!exportPanelsBtn) {
+          exportPanelsBtn = document.createElement("button");
+          exportPanelsBtn.textContent = "Export Solar Panels";
+          exportPanelsBtn.className =
+            "export-panels-btn bg-blue-600 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded";
+          pvConfigDiv.appendChild(exportPanelsBtn);
+        }
+        exportPanelsBtn.style.display = "inline-block";
+
+        // Store current ROI corners for export functions
+        currentCorners = [c0, c1, c2, c3];
+
+        // Set up export button click handlers
+        exportRoiBtn.onclick = () => exportROIToOBJ(currentCorners);
+        exportPanelsBtn.onclick = () => exportSolarPanelsToOBJ(currentCorners);
 
         // --- PV helpers in ROI scope ---
         const clearPVEntities = () => {
@@ -339,6 +720,7 @@ export default function DesignComponent() {
             pvEntities = [];
           }
         };
+
         const generatePVLayout = (rows, cols) => {
           clearPVEntities();
           const o = c0;
@@ -423,12 +805,17 @@ export default function DesignComponent() {
             }
           }
         };
+
         const onPVInputChange = () => {
           const rows = Math.max(1, Number(rowInput.value));
           const cols = Math.max(1, Number(colInput.value));
           generatePVLayout(rows, cols);
         };
         // --- End PV helpers ---
+
+        // Update PV layout on input change
+        rowInput.addEventListener("input", onPVInputChange);
+        colInput.addEventListener("input", onPVInputChange);
 
         // Initial PV layout
         generatePVLayout(Number(rowInput.value), Number(colInput.value));
