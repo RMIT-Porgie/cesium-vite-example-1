@@ -24,7 +24,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "eslint": "eslint \"./**/*.js\" \"./**/*.html\" --cache --quiet",
+    "eslint": "eslint \"./**/*.js\" --cache --quiet",
     "prettier": "prettier --write --no-config \"**/*\"",
     "prettier-check": "prettier --check --no-config \"**/*\""
   },
@@ -45,8 +45,11 @@
     "tailwindcss": "^4.1.11"
   },
   "lint-staged": {
-    "*.{js,html}": [
+    "*.js": [
       "eslint --cache --quiet",
+      "prettier --write --no-config"
+    ],
+    "*.html": [
       "prettier --write --no-config"
     ]
   }

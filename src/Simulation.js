@@ -1,13 +1,41 @@
-// Simulation component logic for Cesium light shadows
+// Simulation component logic for Cesium light shadows with modern design
 export default function SimulationComponent() {
+  const div = document.createElement("div");
+  div.className = "space-y-6";
+
+  // Header section
+  const header = document.createElement("div");
+  header.className = "text-center mb-6";
+  const title = document.createElement("h2");
+  title.textContent = "Light & Shadow Simulation";
+  title.className = "text-2xl font-bold text-gray-800 mb-2";
+  const subtitle = document.createElement("p");
+  subtitle.textContent =
+    "Configure lighting and shadow effects for realistic visualization";
+  subtitle.className = "text-gray-600 text-sm";
+  header.appendChild(title);
+  header.appendChild(subtitle);
+  div.appendChild(header);
+
+  // Main control card
+  const controlCard = document.createElement("div");
+  controlCard.className = "modern-card p-6";
+
+  const cardTitle = document.createElement("h3");
+  cardTitle.textContent = "Shadow Controls";
+  cardTitle.className = "text-lg font-semibold text-gray-800 mb-4";
+  controlCard.appendChild(cardTitle);
+
+  const description = document.createElement("p");
+  description.textContent =
+    "Enable realistic lighting and shadow effects to enhance the visual quality of your solar panel design.";
+  description.className = "text-gray-600 mb-6 text-sm leading-relaxed";
+  controlCard.appendChild(description);
+
   const button = document.createElement("button");
   button.id = "shadowToggleBtn";
-  button.className = `
-    bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg
-    shadow-lg transition-all duration-200 transform hover:scale-105
-    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50
-  `;
-  button.textContent = "Enable Light Shadows";
+  button.className = "btn-modern w-full";
+  button.textContent = "⚡ Enable Light Shadows";
 
   let shadowsEnabled = false;
 
@@ -21,27 +49,22 @@ export default function SimulationComponent() {
     if (!shadowsEnabled) {
       // Enable shadows
       enableShadows(viewer);
-      button.textContent = "Disable Light Shadows";
-      button.className = `
-        bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg
-        shadow-lg transition-all duration-200 transform hover:scale-105
-        focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50
-      `;
+      button.textContent = "🌙 Disable Light Shadows";
+      button.className = "btn-modern w-full";
       shadowsEnabled = true;
     } else {
       // Disable shadows
       disableShadows(viewer);
-      button.textContent = "Enable Light Shadows";
-      button.className = `
-        bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg
-        shadow-lg transition-all duration-200 transform hover:scale-105
-        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50
-      `;
+      button.textContent = "⚡ Enable Light Shadows";
+      button.className = "btn-modern w-full";
       shadowsEnabled = false;
     }
   });
 
-  return button;
+  controlCard.appendChild(button);
+  div.appendChild(controlCard);
+
+  return div;
 }
 
 function enableShadows(viewer) {

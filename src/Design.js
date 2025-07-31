@@ -14,55 +14,119 @@ export default function DesignComponent() {
   let rectangleEntity = null;
   let handler = null;
 
-  // UI setup (button, etc.)
+  // Modern UI setup with improved layout
   const div = document.createElement("div");
-  div.className = "p-4";
-  const roiBtn = document.createElement("button");
-  roiBtn.textContent = "Region of Interest";
-  roiBtn.className =
-    "bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-4";
+  div.className = "space-y-6";
 
-  // Info display for width, length, area
+  // Header section
+  const header = document.createElement("div");
+  header.className = "text-center mb-6";
+  const title = document.createElement("h2");
+  title.textContent = "Solar Panel Design";
+  title.className = "text-2xl font-bold text-gray-800 mb-2";
+  const subtitle = document.createElement("p");
+  subtitle.textContent =
+    "Define your region of interest and configure solar panel layout";
+  subtitle.className = "text-gray-600";
+  header.appendChild(title);
+  header.appendChild(subtitle);
+  div.appendChild(header);
+
+  // ROI Button with modern styling
+  const roiBtn = document.createElement("button");
+  roiBtn.textContent = "🎯 Define Region of Interest";
+  roiBtn.className = "btn-modern w-full mb-6";
+
+  // Info display for width, length, area with modern card
+  const infoCard = document.createElement("div");
+  infoCard.className = "modern-card p-4 mb-4";
+  const infoTitle = document.createElement("h3");
+  infoTitle.textContent = "Region Specifications";
+  infoTitle.className = "text-lg font-semibold text-gray-800 mb-3";
+  infoCard.appendChild(infoTitle);
+
   const infoDiv = document.createElement("div");
-  infoDiv.className = "mb-2 text-gray-700";
-  div.appendChild(infoDiv);
+  infoDiv.className = "grid grid-cols-3 gap-4 text-sm";
+  infoCard.appendChild(infoDiv);
+
+  div.appendChild(infoCard);
   div.appendChild(roiBtn);
 
-  // PV array configuration UI (hidden until ROI is set)
+  // PV array configuration UI with modern styling
+  const pvConfigCard = document.createElement("div");
+  pvConfigCard.className = "modern-card p-4";
+  pvConfigCard.style.display = "none";
+
+  const pvTitle = document.createElement("h3");
+  pvTitle.textContent = "Solar Panel Configuration";
+  pvTitle.className = "text-lg font-semibold text-gray-800 mb-4";
+  pvConfigCard.appendChild(pvTitle);
+
   const pvConfigDiv = document.createElement("div");
-  pvConfigDiv.className = "mb-2 flex gap-4 items-center";
-  pvConfigDiv.style.display = "none";
+  pvConfigDiv.className = "space-y-4";
+
+  // Input groups
+  const inputGroup1 = document.createElement("div");
+  inputGroup1.className = "grid grid-cols-2 gap-4";
+
+  const rowGroup = document.createElement("div");
   const rowLabel = document.createElement("label");
-  rowLabel.textContent = "Rows:";
+  rowLabel.textContent = "Rows";
+  rowLabel.className = "label-modern block";
   const rowInput = document.createElement("input");
   rowInput.type = "number";
   rowInput.min = 1;
   rowInput.value = 2;
-  rowInput.className = "border rounded px-2 py-1 w-16";
+  rowInput.className = "input-modern w-full";
+  rowGroup.appendChild(rowLabel);
+  rowGroup.appendChild(rowInput);
+
+  const colGroup = document.createElement("div");
   const colLabel = document.createElement("label");
-  colLabel.textContent = "Columns:";
+  colLabel.textContent = "Columns";
+  colLabel.className = "label-modern block";
   const colInput = document.createElement("input");
   colInput.type = "number";
   colInput.min = 1;
   colInput.value = 2;
-  colInput.className = "border rounded px-2 py-1 w-16";
-  // PV Height input
+  colInput.className = "input-modern w-full";
+  colGroup.appendChild(colLabel);
+  colGroup.appendChild(colInput);
+
+  inputGroup1.appendChild(rowGroup);
+  inputGroup1.appendChild(colGroup);
+
+  const heightGroup = document.createElement("div");
   const heightLabel = document.createElement("label");
-  heightLabel.textContent = "PV Height (m):";
+  heightLabel.textContent = "Panel Height (meters)";
+  heightLabel.className = "label-modern block";
   const heightInput = document.createElement("input");
   heightInput.type = "number";
   heightInput.min = 0;
   heightInput.step = 0.1;
   heightInput.value = 3;
-  heightInput.className = "border rounded px-2 py-1 w-20";
+  heightInput.className = "input-modern w-full";
+  heightGroup.appendChild(heightLabel);
+  heightGroup.appendChild(heightInput);
 
-  pvConfigDiv.appendChild(rowLabel);
-  pvConfigDiv.appendChild(rowInput);
-  pvConfigDiv.appendChild(colLabel);
-  pvConfigDiv.appendChild(colInput);
-  pvConfigDiv.appendChild(heightLabel);
-  pvConfigDiv.appendChild(heightInput);
-  div.appendChild(pvConfigDiv);
+  pvConfigDiv.appendChild(inputGroup1);
+  pvConfigDiv.appendChild(heightGroup);
+
+  // Export buttons section
+  const exportSection = document.createElement("div");
+  exportSection.className = "border-t pt-4 mt-4";
+  const exportTitle = document.createElement("h4");
+  exportTitle.textContent = "Export Options";
+  exportTitle.className = "text-md font-semibold text-gray-700 mb-3";
+  exportSection.appendChild(exportTitle);
+
+  const exportButtons = document.createElement("div");
+  exportButtons.className = "flex gap-3";
+  exportSection.appendChild(exportButtons);
+
+  pvConfigCard.appendChild(pvConfigDiv);
+  pvConfigCard.appendChild(exportSection);
+  div.appendChild(pvConfigCard);
 
   // Store PV rectangles for cleanup
   let pvEntities = [];
@@ -676,33 +740,44 @@ export default function DesignComponent() {
         const widthMeters = cartesianDistance(c0, c1);
         const lengthMeters = cartesianDistance(c0, c3);
         const areaSqMeters = widthMeters * lengthMeters;
-        infoDiv.innerHTML =
-          `<b>Width:</b> ${widthMeters.toFixed(2)} m<br>` +
-          `<b>Length:</b> ${lengthMeters.toFixed(2)} m<br>` +
-          `<b>Area:</b> ${areaSqMeters.toFixed(2)} m²`;
+
+        // Update info display with modern styling
+        infoDiv.innerHTML = `
+          <div class="text-center">
+            <div class="text-2xl font-bold text-blue-600">${widthMeters.toFixed(2)}</div>
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Width (m)</div>
+          </div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-green-600">${lengthMeters.toFixed(2)}</div>
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Length (m)</div>
+          </div>
+          <div class="text-center">
+            <div class="text-2xl font-bold text-purple-600">${areaSqMeters.toFixed(2)}</div>
+            <div class="text-xs text-gray-500 uppercase tracking-wide">Area (m²)</div>
+          </div>
+        `;
 
         // Show PV config UI
-        pvConfigDiv.style.display = "flex";
+        pvConfigCard.style.display = "block";
+
         // --- Export OBJ logic ---
         // Add export buttons for ROI and solar panels separately
-        let exportRoiBtn = pvConfigDiv.querySelector(".export-roi-btn");
-        let exportPanelsBtn = pvConfigDiv.querySelector(".export-panels-btn");
+        let exportRoiBtn = exportButtons.querySelector(".export-roi-btn");
+        let exportPanelsBtn = exportButtons.querySelector(".export-panels-btn");
 
         if (!exportRoiBtn) {
           exportRoiBtn = document.createElement("button");
-          exportRoiBtn.textContent = "Export ROI";
-          exportRoiBtn.className =
-            "export-roi-btn bg-green-600 hover:bg-green-800 text-white font-bold py-2 px-4 rounded mr-2";
-          pvConfigDiv.appendChild(exportRoiBtn);
+          exportRoiBtn.textContent = "📦 Export ROI";
+          exportRoiBtn.className = "export-roi-btn btn-modern flex-1";
+          exportButtons.appendChild(exportRoiBtn);
         }
         exportRoiBtn.style.display = "inline-block";
 
         if (!exportPanelsBtn) {
           exportPanelsBtn = document.createElement("button");
-          exportPanelsBtn.textContent = "Export Solar Panels";
-          exportPanelsBtn.className =
-            "export-panels-btn bg-blue-600 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded";
-          pvConfigDiv.appendChild(exportPanelsBtn);
+          exportPanelsBtn.textContent = "☀️ Export Solar Panels";
+          exportPanelsBtn.className = "export-panels-btn btn-modern flex-1";
+          exportButtons.appendChild(exportPanelsBtn);
         }
         exportPanelsBtn.style.display = "inline-block";
 
@@ -848,7 +923,7 @@ export default function DesignComponent() {
 
   roiBtn.addEventListener("click", () => {
     // Hide PV config until ROI is set
-    pvConfigDiv.style.display = "none";
+    pvConfigCard.style.display = "none";
     startDrawingRectangle();
   });
 
